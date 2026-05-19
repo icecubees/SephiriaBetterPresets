@@ -1,0 +1,30 @@
+# Build outputs
+bin/
+obj/
+dist/
+*.dll
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+# Local generated preset data
+presets.json
+presets.json.bak*
+*.tmp
+*.log
+
+# Local build configuration
+Directory.Build.props
+
+# IDE and editor files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
