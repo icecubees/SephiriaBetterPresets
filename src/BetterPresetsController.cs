@@ -8,7 +8,6 @@ using Newtonsoft.Json;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace BetterPresets;
@@ -81,13 +80,6 @@ public sealed class BetterPresetsController : MonoBehaviour
         {
             EnsureEmbeddedButton();
             nextPanelProbeTime = Time.unscaledTime + 0.5f;
-        }
-
-        Keyboard keyboard = Keyboard.current;
-        if (keyboard != null && (keyboard.f6Key.wasPressedThisFrame || keyboard.f8Key.wasPressedThisFrame || keyboard.insertKey.wasPressedThisFrame ||
-                                 ((keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed) && keyboard.pKey.wasPressedThisFrame)))
-        {
-            SetVisible(!visible);
         }
 
         HandleOriginalCloseClick();
@@ -1227,13 +1219,7 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
-        Mouse mouse = Mouse.current;
-        if (mouse == null)
-        {
-            return;
-        }
-
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, mouse.position.ReadValue(), null, out Vector2 localPoint);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, Input.mousePosition, null, out Vector2 localPoint);
         Vector2 position = localPoint + new Vector2(26f, -20f);
         Vector2 canvasSize = overlayCanvasRect.rect.size;
         Vector2 tooltipSize = overlayTooltipRect.sizeDelta;
@@ -1400,15 +1386,8 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
-        Mouse mouse = Mouse.current;
-        if (mouse == null)
-        {
-            overlayCursorRect.gameObject.SetActive(false);
-            return;
-        }
-
         overlayCursorRect.gameObject.SetActive(true);
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, mouse.position.ReadValue(), null, out Vector2 localPoint);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, Input.mousePosition, null, out Vector2 localPoint);
         overlayCursorRect.anchoredPosition = localPoint + new Vector2(2f, -2f);
         overlayCursorRect.SetAsLastSibling();
     }
@@ -1660,13 +1639,12 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
-        Mouse mouse = Mouse.current;
-        if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+        if (!Input.GetMouseButtonDown(0))
         {
             return;
         }
 
-        Vector2 position = mouse.position.ReadValue();
+        Vector2 position = Input.mousePosition;
         float closeWidth = Mathf.Clamp(Screen.width * 0.045f, 72f, 110f);
         float closeHeight = Mathf.Clamp(Screen.height * 0.105f, 88f, 132f);
         if (position.x < Screen.width - closeWidth || position.y < Screen.height - closeHeight)

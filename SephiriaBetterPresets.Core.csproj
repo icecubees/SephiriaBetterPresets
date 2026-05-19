@@ -48,10 +48,6 @@
       <HintPath>$(SephiriaManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="Unity.InputSystem">
-      <HintPath>$(SephiriaManagedDir)\Unity.InputSystem.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>$(SephiriaManagedDir)\Newtonsoft.Json.dll</HintPath>
       <Private>false</Private>
