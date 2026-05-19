@@ -13,6 +13,7 @@ presets.json
 presets.json.bak*
 *.tmp
 *.log
+docs/SEPHIRIA_MODDING_NOTES.md
 
 # Local build configuration
 Directory.Build.props
