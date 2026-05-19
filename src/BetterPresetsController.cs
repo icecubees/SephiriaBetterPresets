@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace BetterPresets;
@@ -1219,7 +1220,13 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, Input.mousePosition, null, out Vector2 localPoint);
+        Mouse mouse = Mouse.current;
+        if (mouse == null)
+        {
+            return;
+        }
+
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, mouse.position.ReadValue(), null, out Vector2 localPoint);
         Vector2 position = localPoint + new Vector2(26f, -20f);
         Vector2 canvasSize = overlayCanvasRect.rect.size;
         Vector2 tooltipSize = overlayTooltipRect.sizeDelta;
@@ -1386,8 +1393,15 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
+        Mouse mouse = Mouse.current;
+        if (mouse == null)
+        {
+            overlayCursorRect.gameObject.SetActive(false);
+            return;
+        }
+
         overlayCursorRect.gameObject.SetActive(true);
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, Input.mousePosition, null, out Vector2 localPoint);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(overlayCanvasRect, mouse.position.ReadValue(), null, out Vector2 localPoint);
         overlayCursorRect.anchoredPosition = localPoint + new Vector2(2f, -2f);
         overlayCursorRect.SetAsLastSibling();
     }
@@ -1639,12 +1653,13 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
-        if (!Input.GetMouseButtonDown(0))
+        Mouse mouse = Mouse.current;
+        if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
         {
             return;
         }
 
-        Vector2 position = Input.mousePosition;
+        Vector2 position = mouse.position.ReadValue();
         float closeWidth = Mathf.Clamp(Screen.width * 0.045f, 72f, 110f);
         float closeHeight = Mathf.Clamp(Screen.height * 0.105f, 88f, 132f);
         if (position.x < Screen.width - closeWidth || position.y < Screen.height - closeHeight)
