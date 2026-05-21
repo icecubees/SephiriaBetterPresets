@@ -1,6 +1,6 @@
 {
   "modName": "BetterPresets",
-  "modVersion": "0.1.2",
+  "modVersion": "0.1.3",
   "modAuthor": "Codex",
   "dllFile": "BetterPresets.dll",
   "entryClass": "BetterPresets.BetterPresetsMod"

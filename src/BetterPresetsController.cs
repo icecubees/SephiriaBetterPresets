@@ -66,6 +66,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     private bool embeddedButtonLastShown;
     private bool embeddedButtonLastInteractable;
     private string embeddedButtonLastLabel = "";
+    private const float PanelProbeInterval = 0.5f;
 
     private string ModFolder => Path.Combine(Path.GetFullPath(Path.Combine(Application.dataPath, "..")), "AddOns", ModFolderName);
     private string PresetFile => Path.Combine(ModFolder, "presets.json");
@@ -79,8 +80,11 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         if (hookedPanel == null && Time.unscaledTime >= nextPanelProbeTime)
         {
-            EnsureEmbeddedButton();
-            nextPanelProbeTime = Time.unscaledTime + 0.5f;
+            nextPanelProbeTime = Time.unscaledTime + PanelProbeInterval;
+            if (Time.timeScale <= 0.001f)
+            {
+                EnsureEmbeddedButton();
+            }
         }
 
         HandleOriginalCloseClick();

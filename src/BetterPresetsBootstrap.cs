@@ -10,6 +10,7 @@ public sealed class BetterPresetsBootstrap : MonoBehaviour
     private float nextProbeTime;
     private bool controllerAttached;
     private int loadFailureCount;
+    private const float ProbeInterval = 0.5f;
 
     private void Awake()
     {
@@ -23,7 +24,12 @@ public sealed class BetterPresetsBootstrap : MonoBehaviour
             return;
         }
 
-        nextProbeTime = Time.unscaledTime + 0.5f;
+        nextProbeTime = Time.unscaledTime + ProbeInterval;
+        if (Time.timeScale > 0.001f)
+        {
+            return;
+        }
+
         UI_PresetPanel panel = FindFirstObjectByType<UI_PresetPanel>();
         if (panel == null || !panel.IsOpened)
         {
