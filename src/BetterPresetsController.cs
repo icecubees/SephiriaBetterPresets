@@ -23,7 +23,6 @@ public sealed class BetterPresetsController : MonoBehaviour
     private string status = "就绪";
     private PresetStore store = new PresetStore();
     private UI_PresetPanel hookedPanel;
-    private BetterPresetsPanelWatcher panelWatcher;
     private GameObject embeddedButtonObject;
     private float nextPanelProbeTime;
     private float embeddedButtonEnableTime;
@@ -59,7 +58,6 @@ public sealed class BetterPresetsController : MonoBehaviour
     private Color cursorColor = Color.white;
     private Vector2 cursorSize = new Vector2(34f, 38f);
     private TMP_FontAsset uiFont;
-    private readonly List<GameObject> generatedUiObjects = new List<GameObject>();
     private readonly List<Button> slotButtons = new List<Button>();
     private readonly Dictionary<Canvas, CanvasSortState> boostedTooltipCanvases = new Dictionary<Canvas, CanvasSortState>();
     private bool embeddedButtonStateInitialized;
@@ -78,13 +76,10 @@ public sealed class BetterPresetsController : MonoBehaviour
 
     private void Update()
     {
-        if (hookedPanel == null && Time.unscaledTime >= nextPanelProbeTime)
+        if (Time.unscaledTime >= nextPanelProbeTime)
         {
             nextPanelProbeTime = Time.unscaledTime + PanelProbeInterval;
-            if (Time.timeScale <= 0.001f)
-            {
-                EnsureEmbeddedButton();
-            }
+            EnsureEmbeddedButton();
         }
 
         HandleOriginalCloseClick();
@@ -125,20 +120,19 @@ public sealed class BetterPresetsController : MonoBehaviour
 
     private void EnsureEmbeddedButton()
     {
-        UI_PresetPanel panel = FindFirstObjectByType<UI_PresetPanel>();
+        UI_PresetPanel panel = TryGetPresetPanel();
         if (panel == null)
         {
             SetVisible(false);
             DestroyEmbeddedButton();
             hookedPanel = null;
-            panelWatcher = null;
             return;
         }
 
         if (hookedPanel != panel)
         {
             DestroyEmbeddedButton();
-            AttachPresetPanel(panel);
+            hookedPanel = panel;
         }
 
         if (!panel.IsOpened)
@@ -154,17 +148,6 @@ public sealed class BetterPresetsController : MonoBehaviour
         OnPresetPanelOpenStateChanged(panel, isOpened: true);
     }
 
-    private void AttachPresetPanel(UI_PresetPanel panel)
-    {
-        hookedPanel = panel;
-        panelWatcher = panel.GetComponent<BetterPresetsPanelWatcher>();
-        if (panelWatcher == null)
-        {
-            panelWatcher = panel.gameObject.AddComponent<BetterPresetsPanelWatcher>();
-        }
-        panelWatcher.Configure(this, panel);
-    }
-
     private void OnPresetPanelOpenStateChanged(UI_PresetPanel panel, bool isOpened)
     {
         if (panel == null)
@@ -174,7 +157,7 @@ public sealed class BetterPresetsController : MonoBehaviour
 
         if (hookedPanel != panel)
         {
-            AttachPresetPanel(panel);
+            hookedPanel = panel;
         }
 
         if (!isOpened)
@@ -196,19 +179,6 @@ public sealed class BetterPresetsController : MonoBehaviour
         }
 
         RefreshEmbeddedButtonState();
-    }
-
-    private void OnPresetPanelWatcherDestroyed(BetterPresetsPanelWatcher watcher)
-    {
-        if (panelWatcher != watcher)
-        {
-            return;
-        }
-
-        panelWatcher = null;
-        hookedPanel = null;
-        DestroyEmbeddedButton();
-        SetVisible(false);
     }
 
     private void CreateEmbeddedButton(UI_PresetPanel panel)
@@ -360,6 +330,18 @@ public sealed class BetterPresetsController : MonoBehaviour
         embeddedButtonLastShown = false;
         embeddedButtonLastInteractable = false;
         embeddedButtonLastLabel = "";
+    }
+
+    private static UI_PresetPanel TryGetPresetPanel()
+    {
+        try
+        {
+            return UIManager.Instance != null ? UIManager.Instance.GetElement<UI_PresetPanel>() : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private void EnsureOverlayUiShell()
@@ -554,7 +536,6 @@ public sealed class BetterPresetsController : MonoBehaviour
         overlayTooltipBody = null;
         overlayCursorRect = null;
         overlayUiBuilt = false;
-        generatedUiObjects.Clear();
         slotButtons.Clear();
     }
 
@@ -656,7 +637,6 @@ public sealed class BetterPresetsController : MonoBehaviour
             string label = (i + 1) + ". " + name;
             Button button = CreatePresetListButton(listContentRect, "Preset_" + i, label, selectedIndex == i);
             AddLayoutElement(button.gameObject, 78f);
-            generatedUiObjects.Add(button.gameObject);
             button.onClick.AddListener(() =>
             {
                 selectedIndex = index;
@@ -718,13 +698,11 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         TextMeshProUGUI text = CreateText(listContentRect, "ListText", value, 20, new Color32(210, 206, 190, 255), TextAlignmentOptions.Left);
         AddLayoutElement(text.gameObject, 34f);
-        generatedUiObjects.Add(text.gameObject);
     }
 
     private void CreateDetailSection(string title, string value)
     {
         Image section = CreateImage(detailContentRect, "Section_" + title, new Color32(24, 20, 25, 218));
-        generatedUiObjects.Add(section.gameObject);
         VerticalLayoutGroup layout = section.gameObject.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(12, 12, 8, 10);
         layout.spacing = 5f;
@@ -746,7 +724,6 @@ public sealed class BetterPresetsController : MonoBehaviour
     private void CreateFavoriteSection(PresetData preset)
     {
         Image section = CreateImage(detailContentRect, "Section_偏好神器", new Color32(24, 20, 25, 218));
-        generatedUiObjects.Add(section.gameObject);
         VerticalLayoutGroup layout = section.gameObject.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(12, 12, 8, 10);
         layout.spacing = 8f;
@@ -787,7 +764,6 @@ public sealed class BetterPresetsController : MonoBehaviour
     private void CreatePocketItemSection(PresetData preset)
     {
         Image section = CreateImage(detailContentRect, "Section_许愿泉", new Color32(24, 20, 25, 218));
-        generatedUiObjects.Add(section.gameObject);
         VerticalLayoutGroup layout = section.gameObject.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(12, 12, 8, 10);
         layout.spacing = 8f;
@@ -833,7 +809,6 @@ public sealed class BetterPresetsController : MonoBehaviour
         }
 
         Image section = CreateImage(detailContentRect, "Section_初始神器", new Color32(24, 20, 25, 218));
-        generatedUiObjects.Add(section.gameObject);
         VerticalLayoutGroup layout = section.gameObject.AddComponent<VerticalLayoutGroup>();
         layout.padding = new RectOffset(12, 12, 8, 10);
         layout.spacing = 8f;
@@ -1412,7 +1387,7 @@ public sealed class BetterPresetsController : MonoBehaviour
 
     private void CaptureUiStyle()
     {
-        UI_PresetPanel panel = hookedPanel != null ? hookedPanel : FindFirstObjectByType<UI_PresetPanel>();
+        UI_PresetPanel panel = hookedPanel != null ? hookedPanel : TryGetPresetPanel();
         if (panel == null)
         {
             return;
@@ -1671,7 +1646,7 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
-        UI_PresetPanel panel = hookedPanel != null ? hookedPanel : FindFirstObjectByType<UI_PresetPanel>();
+        UI_PresetPanel panel = hookedPanel != null ? hookedPanel : TryGetPresetPanel();
         if (panel != null && panel.IsOpened)
         {
             panel.Close();
@@ -1790,7 +1765,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         try
         {
-            UI_PresetPanel panel = hookedPanel != null ? hookedPanel : FindFirstObjectByType<UI_PresetPanel>();
+            UI_PresetPanel panel = hookedPanel != null ? hookedPanel : TryGetPresetPanel();
             if (panel == null)
             {
                 return false;
@@ -1830,7 +1805,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         try
         {
-            UI_PresetPanel panel = FindFirstObjectByType<UI_PresetPanel>();
+            UI_PresetPanel panel = TryGetPresetPanel();
             if (panel != null && panel.IsOpened)
             {
                 panel.UpdatePresetInfo(Mathf.Clamp(slotIndex, 0, 4), showError: true);
@@ -2733,7 +2708,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         try
         {
-            UI_PresetPanel panel = FindFirstObjectByType<UI_PresetPanel>();
+            UI_PresetPanel panel = TryGetPresetPanel();
             if (panel != null && panel.IsOpened)
             {
                 FieldInfo field = typeof(UI_PresetPanel).GetField("currentViewSlotIndex", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -2759,7 +2734,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         try
         {
-            UI_PresetPanel panel = hookedPanel != null ? hookedPanel : FindFirstObjectByType<UI_PresetPanel>();
+            UI_PresetPanel panel = hookedPanel != null ? hookedPanel : TryGetPresetPanel();
             if (panel != null && panel.IsOpened)
             {
                 FieldInfo field = typeof(UI_PresetPanel).GetField("currentViewSlotIndex", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -3135,46 +3110,6 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         public bool overrideSorting;
         public int sortingOrder;
-    }
-
-    private sealed class BetterPresetsPanelWatcher : MonoBehaviour
-    {
-        private BetterPresetsController owner;
-        private UI_PresetPanel panel;
-        private bool lastOpenState;
-
-        public void Configure(BetterPresetsController controller, UI_PresetPanel presetPanel)
-        {
-            owner = controller;
-            panel = presetPanel;
-            lastOpenState = panel != null && panel.IsOpened;
-        }
-
-        private void Update()
-        {
-            if (owner == null || panel == null)
-            {
-                Destroy(this);
-                return;
-            }
-
-            bool isOpened = panel.IsOpened;
-            if (isOpened == lastOpenState)
-            {
-                return;
-            }
-
-            lastOpenState = isOpened;
-            owner.OnPresetPanelOpenStateChanged(panel, isOpened);
-        }
-
-        private void OnDestroy()
-        {
-            if (owner != null)
-            {
-                owner.OnPresetPanelWatcherDestroyed(this);
-            }
-        }
     }
 
     private sealed class FavoriteHover : MonoBehaviour, IUITooltipOpener, IPointerEnterHandler, IPointerExitHandler

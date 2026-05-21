@@ -25,12 +25,7 @@ public sealed class BetterPresetsBootstrap : MonoBehaviour
         }
 
         nextProbeTime = Time.unscaledTime + ProbeInterval;
-        if (Time.timeScale > 0.001f)
-        {
-            return;
-        }
-
-        UI_PresetPanel panel = FindFirstObjectByType<UI_PresetPanel>();
+        UI_PresetPanel panel = TryGetPresetPanel();
         if (panel == null || !panel.IsOpened)
         {
             return;
@@ -64,6 +59,18 @@ public sealed class BetterPresetsBootstrap : MonoBehaviour
             loadFailureCount++;
             nextProbeTime = Time.unscaledTime + Mathf.Min(30f, 5f * loadFailureCount);
             Debug.LogError("[BetterPresets] Failed to load BetterPresets.Core.dll. Retrying in " + Mathf.RoundToInt(nextProbeTime - Time.unscaledTime) + "s: " + ex);
+        }
+    }
+
+    private static UI_PresetPanel TryGetPresetPanel()
+    {
+        try
+        {
+            return UIManager.Instance != null ? UIManager.Instance.GetElement<UI_PresetPanel>() : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 
