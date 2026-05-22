@@ -31,6 +31,8 @@ BetterPresets-v0.1.4.zip
 <Sephiria 安装目录>/AddOns/
 ```
 
+如果游戏安装目录下还没有 `AddOns` 文件夹，请自己新建一个。
+
 最终目录结构应类似：
 
 ```text
@@ -48,6 +50,8 @@ BetterPresets-v0.1.4.zip
 ```text
 <Sephiria 安装目录>/AddOns/BetterPresets/
 ```
+
+如果没有 `AddOns` 文件夹，请先创建 `AddOns`，再在里面创建 `BetterPresets` 文件夹。
 
 放入以下文件：
 
