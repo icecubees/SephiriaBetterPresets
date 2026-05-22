@@ -141,6 +141,10 @@ public sealed class BetterPresetsController : MonoBehaviour
             if (embeddedButtonObject != null)
             {
                 embeddedButtonObject.SetActive(false);
+                SetEmbeddedButtonInteractable(false);
+                embeddedButtonLastShown = false;
+                embeddedButtonLastInteractable = false;
+                embeddedButtonStateInitialized = true;
             }
             return;
         }
@@ -242,17 +246,15 @@ public sealed class BetterPresetsController : MonoBehaviour
 
         bool shouldShow = !visible;
         bool canInteract = shouldShow && Time.unscaledTime >= embeddedButtonEnableTime;
-        if (!embeddedButtonStateInitialized || embeddedButtonLastShown != shouldShow)
+        if (shouldShow)
         {
-            embeddedButtonObject.SetActive(shouldShow);
-            embeddedButtonLastShown = shouldShow;
+            embeddedButtonObject.transform.SetAsLastSibling();
         }
+        embeddedButtonObject.SetActive(shouldShow);
+        embeddedButtonLastShown = shouldShow;
         SetEmbeddedButtonLabel("外部预设");
-        if (!embeddedButtonStateInitialized || embeddedButtonLastInteractable != canInteract)
-        {
-            SetEmbeddedButtonInteractable(canInteract);
-            embeddedButtonLastInteractable = canInteract;
-        }
+        SetEmbeddedButtonInteractable(canInteract);
+        embeddedButtonLastInteractable = canInteract;
         embeddedButtonStateInitialized = true;
     }
 
@@ -650,7 +652,7 @@ public sealed class BetterPresetsController : MonoBehaviour
         HideFavoriteTooltip();
         ClearGeneratedChildren(detailContentRect);
         PresetData selected = GetSelectedPreset(silent: true);
-        if (nameInputField != null)
+        if (nameInputField != null && !nameInputField.isFocused)
         {
             nameInputField.SetTextWithoutNotify(selected == null ? "" : selected.name ?? "");
         }
@@ -1227,6 +1229,12 @@ public sealed class BetterPresetsController : MonoBehaviour
         input.targetGraphic = background;
         input.characterLimit = 64;
         input.textViewport = background.rectTransform;
+        input.lineType = TMP_InputField.LineType.SingleLine;
+        input.contentType = TMP_InputField.ContentType.Standard;
+        input.richText = false;
+        Navigation navigation = input.navigation;
+        navigation.mode = Navigation.Mode.None;
+        input.navigation = navigation;
 
         TextMeshProUGUI text = CreateText(background.rectTransform, "Text", "", 22, new Color32(245, 242, 230, 255), TextAlignmentOptions.Left);
         text.textWrappingMode = TextWrappingModes.NoWrap;
@@ -1238,7 +1246,13 @@ public sealed class BetterPresetsController : MonoBehaviour
 
         input.textComponent = text;
         input.placeholder = placeholder;
+        input.onSelect.AddListener(_ =>
+        {
+            input.ActivateInputField();
+        });
         input.onSubmit.AddListener(_ => RenameSelectedFromInput());
+        InputFieldClickFocus focus = background.gameObject.AddComponent<InputFieldClickFocus>();
+        focus.Configure(input);
         return input;
     }
 
@@ -3110,6 +3124,27 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         public bool overrideSorting;
         public int sortingOrder;
+    }
+
+    private sealed class InputFieldClickFocus : MonoBehaviour, IPointerClickHandler
+    {
+        private TMP_InputField input;
+
+        public void Configure(TMP_InputField inputField)
+        {
+            input = inputField;
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (input == null)
+            {
+                return;
+            }
+
+            EventSystem.current?.SetSelectedGameObject(input.gameObject);
+            input.ActivateInputField();
+        }
     }
 
     private sealed class FavoriteHover : MonoBehaviour, IUITooltipOpener, IPointerEnterHandler, IPointerExitHandler
