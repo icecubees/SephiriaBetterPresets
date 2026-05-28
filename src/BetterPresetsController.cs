@@ -481,7 +481,7 @@ public sealed class BetterPresetsController : MonoBehaviour
 
         Button renameButton = CreateButton(rightPanel.rectTransform, "RenameButton", "改名", 20, new Color32(58, 42, 52, 245));
         SetAnchors(renameButton.GetComponent<RectTransform>(), 0.875f, 0.835f, 0.98f, 0.895f, 0f, 0f, 0f, 0f);
-        renameButton.onClick.AddListener(RenameSelectedFromInput);
+        renameButton.onClick.AddListener(OpenRenameDialog);
 
         ScrollRect detailScrollRect = CreateScrollRect(rightPanel.rectTransform, "DetailScroll");
         SetAnchors(detailScrollRect.GetComponent<RectTransform>(), 0.025f, 0.18f, 0.98f, 0.82f, 0f, 0f, 0f, 0f);
@@ -694,6 +694,94 @@ public sealed class BetterPresetsController : MonoBehaviour
         storeRevision++;
         status = "已改名为：" + newName;
         RefreshOverlayUi();
+    }
+
+    private void OpenRenameDialog()
+    {
+        EnsureStoreLoaded();
+        PresetData selected = GetSelectedPreset();
+        if (selected == null)
+        {
+            status = "请选择要改名的外部预设。";
+            RefreshOverlayHeaderUi();
+            return;
+        }
+
+        UI_MessageBoxHolder holder = null;
+        try
+        {
+            holder = UIManager.Instance != null ? UIManager.Instance.GetElement<UI_MessageBoxHolder>() : null;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[BetterPresets] Failed to get rename dialog holder: " + ex.Message);
+        }
+
+        if (holder == null)
+        {
+            status = "无法打开原生改名窗口。";
+            RefreshOverlayHeaderUi();
+            return;
+        }
+
+        int renameIndex = selectedIndex;
+        string currentName = string.IsNullOrWhiteSpace(selected.name) ? "未命名预设" : selected.name;
+        if (overlayRoot != null)
+        {
+            overlayRoot.SetActive(false);
+        }
+
+        UI_MessageBox dialogBox = holder.OpenInputYesNoPrefab(
+            "输入新的外部预设名称",
+            value => ApplyRenameFromDialog(renameIndex, value),
+            _ => status = "已取消改名。",
+            currentName,
+            "预设名称",
+            allowEmpty: false);
+        UI_MessageBox_InputYesNo dialog = dialogBox as UI_MessageBox_InputYesNo;
+
+        if (dialog != null)
+        {
+            if (dialog.input != null)
+            {
+                dialog.input.characterLimit = 64;
+            }
+            dialog.onCloseMessageBox += _ => RestoreOverlayAfterRenameDialog();
+        }
+        else if (dialogBox != null)
+        {
+            dialogBox.onCloseMessageBox += _ => RestoreOverlayAfterRenameDialog();
+        }
+        else
+        {
+            RestoreOverlayAfterRenameDialog();
+        }
+    }
+
+    private void ApplyRenameFromDialog(int renameIndex, string value)
+    {
+        EnsureStoreLoaded();
+        if (renameIndex < 0 || renameIndex >= store.presets.Count)
+        {
+            status = "改名失败：预设已不存在。";
+            return;
+        }
+
+        string newName = string.IsNullOrWhiteSpace(value) ? "未命名预设" : value.Trim();
+        store.presets[renameIndex].name = newName;
+        selectedIndex = renameIndex;
+        SaveStore();
+        storeRevision++;
+        status = "已改名为：" + newName;
+    }
+
+    private void RestoreOverlayAfterRenameDialog()
+    {
+        if (visible && overlayRoot != null)
+        {
+            overlayRoot.SetActive(true);
+            RefreshOverlayUi();
+        }
     }
 
     private void CreateListText(string value)
@@ -1229,6 +1317,8 @@ public sealed class BetterPresetsController : MonoBehaviour
         input.targetGraphic = background;
         input.characterLimit = 64;
         input.textViewport = background.rectTransform;
+        input.interactable = false;
+        input.readOnly = true;
         input.lineType = TMP_InputField.LineType.SingleLine;
         input.contentType = TMP_InputField.ContentType.Standard;
         input.richText = false;
@@ -1246,13 +1336,6 @@ public sealed class BetterPresetsController : MonoBehaviour
 
         input.textComponent = text;
         input.placeholder = placeholder;
-        input.onSelect.AddListener(_ =>
-        {
-            input.ActivateInputField();
-        });
-        input.onSubmit.AddListener(_ => RenameSelectedFromInput());
-        InputFieldClickFocus focus = background.gameObject.AddComponent<InputFieldClickFocus>();
-        focus.Configure(input);
         return input;
     }
 
@@ -3124,27 +3207,6 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         public bool overrideSorting;
         public int sortingOrder;
-    }
-
-    private sealed class InputFieldClickFocus : MonoBehaviour, IPointerClickHandler
-    {
-        private TMP_InputField input;
-
-        public void Configure(TMP_InputField inputField)
-        {
-            input = inputField;
-        }
-
-        public void OnPointerClick(PointerEventData eventData)
-        {
-            if (input == null)
-            {
-                return;
-            }
-
-            EventSystem.current?.SetSelectedGameObject(input.gameObject);
-            input.ActivateInputField();
-        }
     }
 
     private sealed class FavoriteHover : MonoBehaviour, IUITooltipOpener, IPointerEnterHandler, IPointerExitHandler
