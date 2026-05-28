@@ -42,14 +42,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     private RectTransform overlayPanelRect;
     private RectTransform listContentRect;
     private RectTransform detailContentRect;
-    private RectTransform nameInputRect;
-    private TextMeshProUGUI nameInputText;
-    private TextMeshProUGUI nameInputPlaceholder;
-    private string nameInputBuffer = "";
-    private bool nameInputFocused;
-    private bool nameInputCaretVisible = true;
-    private float nameInputCaretBlinkTime;
-    private bool legacyTextInputUnavailable;
+    private TMP_InputField nameInputField;
     private TextMeshProUGUI countText;
     private TextMeshProUGUI slotText;
     private TextMeshProUGUI statusText;
@@ -72,7 +65,6 @@ public sealed class BetterPresetsController : MonoBehaviour
     private bool embeddedButtonLastInteractable;
     private string embeddedButtonLastLabel = "";
     private const float PanelProbeInterval = 0.5f;
-    private const int NameInputCharacterLimit = 64;
 
     private string ModFolder => Path.Combine(Path.GetFullPath(Path.Combine(Application.dataPath, "..")), "AddOns", ModFolderName);
     private string PresetFile => Path.Combine(ModFolder, "presets.json");
@@ -108,7 +100,6 @@ public sealed class BetterPresetsController : MonoBehaviour
             }
             else
             {
-                HandleNameInput();
                 UpdateFavoriteTooltipPosition();
                 UpdateOverlayCursor();
             }
@@ -485,8 +476,8 @@ public sealed class BetterPresetsController : MonoBehaviour
         TextMeshProUGUI nameLabel = CreateText(rightPanel.rectTransform, "NameLabel", "名称", 22, new Color32(220, 216, 200, 255), TextAlignmentOptions.Left);
         SetAnchors(nameLabel.rectTransform, 0.025f, 0.835f, 0.085f, 0.895f, 0f, 0f, 0f, 0f);
 
-        nameInputRect = CreateNameInput(rightPanel.rectTransform, "NameInput");
-        SetAnchors(nameInputRect, 0.09f, 0.835f, 0.86f, 0.895f, 0f, 0f, 0f, 0f);
+        nameInputField = CreateInputField(rightPanel.rectTransform, "NameInput");
+        SetAnchors(nameInputField.GetComponent<RectTransform>(), 0.09f, 0.835f, 0.86f, 0.895f, 0f, 0f, 0f, 0f);
 
         Button renameButton = CreateButton(rightPanel.rectTransform, "RenameButton", "改名", 20, new Color32(58, 42, 52, 245));
         SetAnchors(renameButton.GetComponent<RectTransform>(), 0.875f, 0.835f, 0.98f, 0.895f, 0f, 0f, 0f, 0f);
@@ -538,11 +529,7 @@ public sealed class BetterPresetsController : MonoBehaviour
         overlayPanelRect = null;
         listContentRect = null;
         detailContentRect = null;
-        nameInputRect = null;
-        nameInputText = null;
-        nameInputPlaceholder = null;
-        nameInputBuffer = "";
-        nameInputFocused = false;
+        nameInputField = null;
         countText = null;
         slotText = null;
         statusText = null;
@@ -665,9 +652,9 @@ public sealed class BetterPresetsController : MonoBehaviour
         HideFavoriteTooltip();
         ClearGeneratedChildren(detailContentRect);
         PresetData selected = GetSelectedPreset(silent: true);
-        if (nameInputText != null && !nameInputFocused)
+        if (nameInputField != null && !nameInputField.isFocused)
         {
-            SetNameInputValue(selected == null ? "" : selected.name ?? "");
+            nameInputField.SetTextWithoutNotify(selected == null ? "" : selected.name ?? "");
         }
 
         if (detailContentRect == null)
@@ -695,143 +682,18 @@ public sealed class BetterPresetsController : MonoBehaviour
     {
         EnsureStoreLoaded();
         PresetData selected = GetSelectedPreset();
-        if (selected == null || nameInputText == null)
+        if (selected == null || nameInputField == null)
         {
             RefreshOverlayUi();
             return;
         }
 
-        string newName = string.IsNullOrWhiteSpace(nameInputBuffer) ? "未命名预设" : nameInputBuffer.Trim();
+        string newName = string.IsNullOrWhiteSpace(nameInputField.text) ? "未命名预设" : nameInputField.text.Trim();
         selected.name = newName;
-        SetNameInputFocused(false);
-        SetNameInputValue(newName);
         SaveStore();
         storeRevision++;
         status = "已改名为：" + newName;
         RefreshOverlayUi();
-    }
-
-    private void FocusNameInput()
-    {
-        if (nameInputText == null)
-        {
-            return;
-        }
-
-        nameInputFocused = true;
-        nameInputCaretVisible = true;
-        nameInputCaretBlinkTime = Time.unscaledTime + 0.5f;
-        UpdateNameInputDisplay();
-    }
-
-    private void SetNameInputFocused(bool focused)
-    {
-        if (nameInputFocused == focused)
-        {
-            return;
-        }
-
-        nameInputFocused = focused;
-        nameInputCaretVisible = focused;
-        nameInputCaretBlinkTime = Time.unscaledTime + 0.5f;
-        UpdateNameInputDisplay();
-    }
-
-    private void SetNameInputValue(string value)
-    {
-        nameInputBuffer = TruncateNameInput(value ?? "");
-        UpdateNameInputDisplay();
-    }
-
-    private void HandleNameInput()
-    {
-        if (!nameInputFocused || nameInputText == null)
-        {
-            return;
-        }
-
-        bool changed = false;
-        string input = "";
-        if (!legacyTextInputUnavailable)
-        {
-            try
-            {
-                input = UnityEngine.Input.inputString;
-            }
-            catch (Exception ex)
-            {
-                legacyTextInputUnavailable = true;
-                Debug.LogWarning("[BetterPresets] Legacy text input is unavailable, rename typing disabled for this session: " + ex.Message);
-                status = "当前环境不支持改名输入。";
-                RefreshOverlayHeaderUi();
-                SetNameInputFocused(false);
-                return;
-            }
-        }
-        if (!string.IsNullOrEmpty(input))
-        {
-            foreach (char character in input)
-            {
-                if (character == '\b')
-                {
-                    if (nameInputBuffer.Length > 0)
-                    {
-                        nameInputBuffer = nameInputBuffer.Substring(0, nameInputBuffer.Length - 1);
-                        changed = true;
-                    }
-                    continue;
-                }
-
-                if (character == '\n' || character == '\r')
-                {
-                    RenameSelectedFromInput();
-                    return;
-                }
-
-                if (!char.IsControl(character) && nameInputBuffer.Length < NameInputCharacterLimit)
-                {
-                    nameInputBuffer += character;
-                    changed = true;
-                }
-            }
-        }
-
-        if (Time.unscaledTime >= nameInputCaretBlinkTime)
-        {
-            nameInputCaretVisible = !nameInputCaretVisible;
-            nameInputCaretBlinkTime = Time.unscaledTime + 0.5f;
-            changed = true;
-        }
-
-        if (changed)
-        {
-            UpdateNameInputDisplay();
-        }
-    }
-
-    private void UpdateNameInputDisplay()
-    {
-        if (nameInputText == null)
-        {
-            return;
-        }
-
-        string text = nameInputBuffer ?? "";
-        nameInputText.text = nameInputFocused && nameInputCaretVisible ? text + "|" : text;
-        if (nameInputPlaceholder != null)
-        {
-            nameInputPlaceholder.gameObject.SetActive(string.IsNullOrEmpty(text) && !nameInputFocused);
-        }
-    }
-
-    private static string TruncateNameInput(string value)
-    {
-        if (string.IsNullOrEmpty(value) || value.Length <= NameInputCharacterLimit)
-        {
-            return value ?? "";
-        }
-
-        return value.Substring(0, NameInputCharacterLimit);
     }
 
     private void CreateListText(string value)
@@ -1358,25 +1220,40 @@ public sealed class BetterPresetsController : MonoBehaviour
         overlayTooltipRect.anchoredPosition = position;
     }
 
-    private RectTransform CreateNameInput(RectTransform parent, string name)
+    private TMP_InputField CreateInputField(RectTransform parent, string name)
     {
         Image background = CreateImage(parent, name, new Color32(28, 24, 29, 245));
         background.sprite = buttonSprite != null ? buttonSprite : solidSprite;
         background.type = Image.Type.Sliced;
+        TMP_InputField input = background.gameObject.AddComponent<TMP_InputField>();
+        input.targetGraphic = background;
+        input.characterLimit = 64;
+        input.textViewport = background.rectTransform;
+        input.lineType = TMP_InputField.LineType.SingleLine;
+        input.contentType = TMP_InputField.ContentType.Standard;
+        input.richText = false;
+        Navigation navigation = input.navigation;
+        navigation.mode = Navigation.Mode.None;
+        input.navigation = navigation;
 
-        nameInputText = CreateText(background.rectTransform, "Text", "", 22, new Color32(245, 242, 230, 255), TextAlignmentOptions.Left);
-        nameInputText.textWrappingMode = TextWrappingModes.NoWrap;
-        nameInputText.overflowMode = TextOverflowModes.Ellipsis;
-        SetAnchors(nameInputText.rectTransform, 0f, 0f, 1f, 1f, 12f, 5f, -12f, -5f);
+        TextMeshProUGUI text = CreateText(background.rectTransform, "Text", "", 22, new Color32(245, 242, 230, 255), TextAlignmentOptions.Left);
+        text.textWrappingMode = TextWrappingModes.NoWrap;
+        SetAnchors(text.rectTransform, 0f, 0f, 1f, 1f, 12f, 5f, -12f, -5f);
 
-        nameInputPlaceholder = CreateText(background.rectTransform, "Placeholder", "输入预设名称", 22, new Color32(155, 150, 145, 190), TextAlignmentOptions.Left);
-        nameInputPlaceholder.fontStyle = FontStyles.Italic;
-        SetAnchors(nameInputPlaceholder.rectTransform, 0f, 0f, 1f, 1f, 12f, 5f, -12f, -5f);
+        TextMeshProUGUI placeholder = CreateText(background.rectTransform, "Placeholder", "输入预设名称", 22, new Color32(155, 150, 145, 190), TextAlignmentOptions.Left);
+        placeholder.fontStyle = FontStyles.Italic;
+        SetAnchors(placeholder.rectTransform, 0f, 0f, 1f, 1f, 12f, 5f, -12f, -5f);
 
-        NameInputClickFocus focus = background.gameObject.AddComponent<NameInputClickFocus>();
-        focus.Configure(this);
-        UpdateNameInputDisplay();
-        return background.rectTransform;
+        input.textComponent = text;
+        input.placeholder = placeholder;
+        input.onSelect.AddListener(_ =>
+        {
+            input.ActivateInputField();
+        });
+        input.onSubmit.AddListener(_ => RenameSelectedFromInput());
+        InputFieldClickFocus focus = background.gameObject.AddComponent<InputFieldClickFocus>();
+        focus.Configure(input);
+        return input;
     }
 
     private Button CreateButton(RectTransform parent, string name, string label, int fontSize, Color color, TextAlignmentOptions alignment = TextAlignmentOptions.Center)
@@ -1716,7 +1593,6 @@ public sealed class BetterPresetsController : MonoBehaviour
                 StopCoroutine(openOverlayCoroutine);
                 openOverlayCoroutine = null;
             }
-            SetNameInputFocused(false);
             HideFavoriteTooltip();
             RestoreCursorVisibility();
             embeddedButtonEnableTime = Time.unscaledTime + 0.16f;
@@ -3250,18 +3126,24 @@ public sealed class BetterPresetsController : MonoBehaviour
         public int sortingOrder;
     }
 
-    private sealed class NameInputClickFocus : MonoBehaviour, IPointerClickHandler
+    private sealed class InputFieldClickFocus : MonoBehaviour, IPointerClickHandler
     {
-        private BetterPresetsController owner;
+        private TMP_InputField input;
 
-        public void Configure(BetterPresetsController controller)
+        public void Configure(TMP_InputField inputField)
         {
-            owner = controller;
+            input = inputField;
         }
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            owner?.FocusNameInput();
+            if (input == null)
+            {
+                return;
+            }
+
+            EventSystem.current?.SetSelectedGameObject(input.gameObject);
+            input.ActivateInputField();
         }
     }
 
