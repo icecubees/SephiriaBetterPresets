@@ -42,7 +42,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     private RectTransform overlayPanelRect;
     private RectTransform listContentRect;
     private RectTransform detailContentRect;
-    private TMP_InputField nameInputField;
+    private TextMeshProUGUI nameValueText;
     private TextMeshProUGUI countText;
     private TextMeshProUGUI slotText;
     private TextMeshProUGUI statusText;
@@ -60,6 +60,7 @@ public sealed class BetterPresetsController : MonoBehaviour
     private TMP_FontAsset uiFont;
     private readonly List<Button> slotButtons = new List<Button>();
     private readonly Dictionary<Canvas, CanvasSortState> boostedTooltipCanvases = new Dictionary<Canvas, CanvasSortState>();
+    private readonly List<RenameDialogCanvasState> boostedRenameDialogCanvases = new List<RenameDialogCanvasState>();
     private bool embeddedButtonStateInitialized;
     private bool embeddedButtonLastShown;
     private bool embeddedButtonLastInteractable;
@@ -114,6 +115,7 @@ public sealed class BetterPresetsController : MonoBehaviour
             embeddedButtonObject = null;
         }
         RestoreOriginalTooltipCanvases();
+        RestoreRenameDialogCanvases();
         RestoreCursorVisibility();
         DestroyOverlayUi();
     }
@@ -476,10 +478,16 @@ public sealed class BetterPresetsController : MonoBehaviour
         TextMeshProUGUI nameLabel = CreateText(rightPanel.rectTransform, "NameLabel", "名称", 22, new Color32(220, 216, 200, 255), TextAlignmentOptions.Left);
         SetAnchors(nameLabel.rectTransform, 0.025f, 0.835f, 0.085f, 0.895f, 0f, 0f, 0f, 0f);
 
-        nameInputField = CreateInputField(rightPanel.rectTransform, "NameInput");
-        SetAnchors(nameInputField.GetComponent<RectTransform>(), 0.09f, 0.835f, 0.86f, 0.895f, 0f, 0f, 0f, 0f);
+        Image nameDisplay = CreateImage(rightPanel.rectTransform, "NameDisplay", new Color32(28, 24, 29, 245));
+        nameDisplay.sprite = buttonSprite != null ? buttonSprite : solidSprite;
+        nameDisplay.type = Image.Type.Sliced;
+        SetAnchors(nameDisplay.rectTransform, 0.09f, 0.835f, 0.86f, 0.895f, 0f, 0f, 0f, 0f);
+        nameValueText = CreateText(nameDisplay.rectTransform, "NameText", "", 22, new Color32(245, 242, 230, 255), TextAlignmentOptions.Left);
+        nameValueText.textWrappingMode = TextWrappingModes.NoWrap;
+        nameValueText.overflowMode = TextOverflowModes.Ellipsis;
+        Stretch(nameValueText.rectTransform, 12f, 5f, -12f, -5f);
 
-        Button renameButton = CreateButton(rightPanel.rectTransform, "RenameButton", "改名", 20, new Color32(58, 42, 52, 245));
+        Button renameButton = CreateButton(rightPanel.rectTransform, "RenameButton", "点击改名", 20, new Color32(58, 42, 52, 245));
         SetAnchors(renameButton.GetComponent<RectTransform>(), 0.875f, 0.835f, 0.98f, 0.895f, 0f, 0f, 0f, 0f);
         renameButton.onClick.AddListener(OpenRenameDialog);
 
@@ -529,7 +537,7 @@ public sealed class BetterPresetsController : MonoBehaviour
         overlayPanelRect = null;
         listContentRect = null;
         detailContentRect = null;
-        nameInputField = null;
+        nameValueText = null;
         countText = null;
         slotText = null;
         statusText = null;
@@ -652,9 +660,9 @@ public sealed class BetterPresetsController : MonoBehaviour
         HideFavoriteTooltip();
         ClearGeneratedChildren(detailContentRect);
         PresetData selected = GetSelectedPreset(silent: true);
-        if (nameInputField != null && !nameInputField.isFocused)
+        if (nameValueText != null)
         {
-            nameInputField.SetTextWithoutNotify(selected == null ? "" : selected.name ?? "");
+            nameValueText.text = selected == null ? "" : selected.name ?? "";
         }
 
         if (detailContentRect == null)
@@ -678,24 +686,6 @@ public sealed class BetterPresetsController : MonoBehaviour
         CreateFavoriteSection(selected);
     }
 
-    private void RenameSelectedFromInput()
-    {
-        EnsureStoreLoaded();
-        PresetData selected = GetSelectedPreset();
-        if (selected == null || nameInputField == null)
-        {
-            RefreshOverlayUi();
-            return;
-        }
-
-        string newName = string.IsNullOrWhiteSpace(nameInputField.text) ? "未命名预设" : nameInputField.text.Trim();
-        selected.name = newName;
-        SaveStore();
-        storeRevision++;
-        status = "已改名为：" + newName;
-        RefreshOverlayUi();
-    }
-
     private void OpenRenameDialog()
     {
         EnsureStoreLoaded();
@@ -707,55 +697,44 @@ public sealed class BetterPresetsController : MonoBehaviour
             return;
         }
 
-        UI_MessageBoxHolder holder = null;
+        int renameIndex = selectedIndex;
+        string currentName = string.IsNullOrWhiteSpace(selected.name) ? "未命名预设" : selected.name;
+        UI_MessageBox dialog = null;
         try
         {
-            holder = UIManager.Instance != null ? UIManager.Instance.GetElement<UI_MessageBoxHolder>() : null;
+            UI_MessageBox_InputYesNo directDialog = UIManager.Instance != null ? UIManager.Instance.GetElement<UI_MessageBox_InputYesNo>() : null;
+            if (directDialog != null)
+            {
+                directDialog.Open("输入新的外部预设名称", value => ApplyRenameFromDialog(renameIndex, value), _ => status = "已取消改名。", currentName, "预设名称", allowEmpty: false, 40);
+                dialog = directDialog;
+            }
+            else
+            {
+                UI_MessageBoxHolder holder = UIManager.Instance != null ? UIManager.Instance.GetElement<UI_MessageBoxHolder>() : null;
+                if (holder != null)
+                {
+                    dialog = holder.OpenInputYesNoPrefab("输入新的外部预设名称", value => ApplyRenameFromDialog(renameIndex, value), _ => status = "已取消改名。", currentName, "预设名称", allowEmpty: false);
+                    if (dialog is UI_MessageBox_InputYesNo inputDialog && inputDialog.input != null)
+                    {
+                        inputDialog.input.characterLimit = 40;
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("[BetterPresets] Failed to get rename dialog holder: " + ex.Message);
+            Debug.LogWarning("[BetterPresets] Failed to open native rename dialog: " + ex.Message);
         }
 
-        if (holder == null)
+        if (dialog == null)
         {
-            status = "无法打开原生改名窗口。";
+            status = "无法打开原版改名窗口。";
             RefreshOverlayHeaderUi();
             return;
         }
 
-        int renameIndex = selectedIndex;
-        string currentName = string.IsNullOrWhiteSpace(selected.name) ? "未命名预设" : selected.name;
-        if (overlayRoot != null)
-        {
-            overlayRoot.SetActive(false);
-        }
-
-        UI_MessageBox dialogBox = holder.OpenInputYesNoPrefab(
-            "输入新的外部预设名称",
-            value => ApplyRenameFromDialog(renameIndex, value),
-            _ => status = "已取消改名。",
-            currentName,
-            "预设名称",
-            allowEmpty: false);
-        UI_MessageBox_InputYesNo dialog = dialogBox as UI_MessageBox_InputYesNo;
-
-        if (dialog != null)
-        {
-            if (dialog.input != null)
-            {
-                dialog.input.characterLimit = 64;
-            }
-            dialog.onCloseMessageBox += _ => RestoreOverlayAfterRenameDialog();
-        }
-        else if (dialogBox != null)
-        {
-            dialogBox.onCloseMessageBox += _ => RestoreOverlayAfterRenameDialog();
-        }
-        else
-        {
-            RestoreOverlayAfterRenameDialog();
-        }
+        BoostRenameDialogCanvas(dialog);
+        dialog.onCloseMessageBox = (Action<UI_MessageBox>)Delegate.Combine(dialog.onCloseMessageBox, new Action<UI_MessageBox>(OnRenameDialogClosed));
     }
 
     private void ApplyRenameFromDialog(int renameIndex, string value)
@@ -775,13 +754,89 @@ public sealed class BetterPresetsController : MonoBehaviour
         status = "已改名为：" + newName;
     }
 
-    private void RestoreOverlayAfterRenameDialog()
+    private void OnRenameDialogClosed(UI_MessageBox dialog)
     {
+        if (dialog != null)
+        {
+            dialog.onCloseMessageBox = (Action<UI_MessageBox>)Delegate.Remove(dialog.onCloseMessageBox, new Action<UI_MessageBox>(OnRenameDialogClosed));
+        }
+
+        RestoreRenameDialogCanvases();
         if (visible && overlayRoot != null)
         {
-            overlayRoot.SetActive(true);
             RefreshOverlayUi();
         }
+    }
+
+    private void BoostRenameDialogCanvas(UI_MessageBox dialog)
+    {
+        RestoreRenameDialogCanvases();
+        if (dialog == null)
+        {
+            return;
+        }
+
+        Canvas canvas = dialog.GetComponent<Canvas>();
+        bool addedCanvas = false;
+        if (canvas == null)
+        {
+            canvas = dialog.gameObject.AddComponent<Canvas>();
+            addedCanvas = true;
+        }
+
+        GraphicRaycaster raycaster = dialog.GetComponent<GraphicRaycaster>();
+        bool addedRaycaster = false;
+        if (raycaster == null)
+        {
+            raycaster = dialog.gameObject.AddComponent<GraphicRaycaster>();
+            addedRaycaster = true;
+        }
+
+        boostedRenameDialogCanvases.Add(new RenameDialogCanvasState
+        {
+            canvas = canvas,
+            raycaster = raycaster,
+            addedCanvas = addedCanvas,
+            addedRaycaster = addedRaycaster,
+            overrideSorting = canvas.overrideSorting,
+            sortingOrder = canvas.sortingOrder
+        });
+
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 30050;
+    }
+
+    private void RestoreRenameDialogCanvases()
+    {
+        if (boostedRenameDialogCanvases.Count == 0)
+        {
+            return;
+        }
+
+        foreach (RenameDialogCanvasState state in boostedRenameDialogCanvases.ToList())
+        {
+            if (state.raycaster != null && state.addedRaycaster)
+            {
+                Destroy(state.raycaster);
+            }
+
+            if (state.canvas == null)
+            {
+                continue;
+            }
+
+            if (state.addedCanvas)
+            {
+                Destroy(state.canvas);
+            }
+            else
+            {
+                state.canvas.overrideSorting = state.overrideSorting;
+                state.canvas.sortingOrder = state.sortingOrder;
+            }
+        }
+
+        boostedRenameDialogCanvases.Clear();
     }
 
     private void CreateListText(string value)
@@ -1308,37 +1363,6 @@ public sealed class BetterPresetsController : MonoBehaviour
         overlayTooltipRect.anchoredPosition = position;
     }
 
-    private TMP_InputField CreateInputField(RectTransform parent, string name)
-    {
-        Image background = CreateImage(parent, name, new Color32(28, 24, 29, 245));
-        background.sprite = buttonSprite != null ? buttonSprite : solidSprite;
-        background.type = Image.Type.Sliced;
-        TMP_InputField input = background.gameObject.AddComponent<TMP_InputField>();
-        input.targetGraphic = background;
-        input.characterLimit = 64;
-        input.textViewport = background.rectTransform;
-        input.interactable = false;
-        input.readOnly = true;
-        input.lineType = TMP_InputField.LineType.SingleLine;
-        input.contentType = TMP_InputField.ContentType.Standard;
-        input.richText = false;
-        Navigation navigation = input.navigation;
-        navigation.mode = Navigation.Mode.None;
-        input.navigation = navigation;
-
-        TextMeshProUGUI text = CreateText(background.rectTransform, "Text", "", 22, new Color32(245, 242, 230, 255), TextAlignmentOptions.Left);
-        text.textWrappingMode = TextWrappingModes.NoWrap;
-        SetAnchors(text.rectTransform, 0f, 0f, 1f, 1f, 12f, 5f, -12f, -5f);
-
-        TextMeshProUGUI placeholder = CreateText(background.rectTransform, "Placeholder", "输入预设名称", 22, new Color32(155, 150, 145, 190), TextAlignmentOptions.Left);
-        placeholder.fontStyle = FontStyles.Italic;
-        SetAnchors(placeholder.rectTransform, 0f, 0f, 1f, 1f, 12f, 5f, -12f, -5f);
-
-        input.textComponent = text;
-        input.placeholder = placeholder;
-        return input;
-    }
-
     private Button CreateButton(RectTransform parent, string name, string label, int fontSize, Color color, TextAlignmentOptions alignment = TextAlignmentOptions.Center)
     {
         Image image = CreateImage(parent, name, color);
@@ -1428,6 +1452,7 @@ public sealed class BetterPresetsController : MonoBehaviour
             overlayCursorRect.pivot = new Vector2(0f, 1f);
             overlayCursorRect.sizeDelta = cursorSize;
             overlayCursorRect.SetAsLastSibling();
+            SetOverlayCursorSorting();
             return;
         }
 
@@ -1437,6 +1462,7 @@ public sealed class BetterPresetsController : MonoBehaviour
         overlayCursorRect.pivot = new Vector2(0f, 1f);
         overlayCursorRect.sizeDelta = new Vector2(34f, 38f);
         overlayCursorRect.SetAsLastSibling();
+        SetOverlayCursorSorting();
 
         AddCursorPart(overlayCursorRect, "OutlineA", 0f, 0f, 5f, 30f, 0f, Color.black);
         AddCursorPart(overlayCursorRect, "OutlineB", 0f, 0f, 22f, 5f, 0f, Color.black);
@@ -1447,6 +1473,23 @@ public sealed class BetterPresetsController : MonoBehaviour
         AddCursorPart(overlayCursorRect, "FillB", 1f, -1f, 16f, 3f, 0f, Color.white);
         AddCursorPart(overlayCursorRect, "FillC", 12f, -13f, 3f, 21f, -38f, Color.white);
         AddCursorPart(overlayCursorRect, "FillD", 14f, -24f, 11f, 3f, 0f, Color.white);
+    }
+
+    private void SetOverlayCursorSorting()
+    {
+        if (overlayCursorRect == null)
+        {
+            return;
+        }
+
+        Canvas canvas = overlayCursorRect.GetComponent<Canvas>();
+        if (canvas == null)
+        {
+            canvas = overlayCursorRect.gameObject.AddComponent<Canvas>();
+        }
+
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 30080;
     }
 
     private void AddCursorPart(RectTransform parent, string name, float x, float y, float width, float height, float rotation, Color color)
@@ -3205,6 +3248,16 @@ public sealed class BetterPresetsController : MonoBehaviour
 
     private sealed class CanvasSortState
     {
+        public bool overrideSorting;
+        public int sortingOrder;
+    }
+
+    private sealed class RenameDialogCanvasState
+    {
+        public Canvas canvas;
+        public GraphicRaycaster raycaster;
+        public bool addedCanvas;
+        public bool addedRaycaster;
         public bool overrideSorting;
         public int sortingOrder;
     }
